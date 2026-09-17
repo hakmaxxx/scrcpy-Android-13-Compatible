@@ -25,6 +25,8 @@ public final class InputManager {
     private static Method injectInputEventMethod;
     private static Method setDisplayIdMethod;
     private static Method setActionButtonMethod;
+    private static Method addUniqueIdAssociationMethod;
+    private static Method removeUniqueIdAssociationMethod;
     private static Method addUniqueIdAssociationByPortMethod;
     private static Method removeUniqueIdAssociationByPortMethod;
 
@@ -55,14 +57,12 @@ public final class InputManager {
                 if (cause instanceof SecurityException) {
                     String message = e.getCause().getMessage();
                     if (message != null && message.contains("INJECT_EVENTS permission")) {
-                        // Do not flood the console, limit to one permission error log every 3 seconds
                         long now = System.currentTimeMillis();
                         if (lastPermissionLogDate <= now - 3000) {
                             Ln.e(message);
                             Ln.e("Make sure you have enabled \"USB debugging (Security Settings)\" and then rebooted your device.");
                             lastPermissionLogDate = now;
                         }
-                        // Do not print the stack trace
                         return false;
                     }
                 }
@@ -105,6 +105,42 @@ public final class InputManager {
         } catch (ReflectiveOperationException e) {
             Ln.e("Cannot set action button on MotionEvent", e);
             return false;
+        }
+    }
+
+    private static Method getAddUniqueIdAssociationMethod() throws NoSuchMethodException {
+        if (addUniqueIdAssociationMethod == null) {
+            addUniqueIdAssociationMethod = android.hardware.input.InputManager.class.getMethod(
+                    "addUniqueIdAssociation", String.class, String.class);
+        }
+        return addUniqueIdAssociationMethod;
+    }
+
+    @TargetApi(AndroidVersions.API_33_ANDROID_13)
+    public void addUniqueIdAssociation(String inputPort, String uniqueId) {
+        try {
+            Method method = getAddUniqueIdAssociationMethod();
+            method.invoke(manager, inputPort, uniqueId);
+        } catch (ReflectiveOperationException e) {
+            Ln.e("Cannot add unique id association", e);
+        }
+    }
+
+    private static Method getRemoveUniqueIdAssociationMethod() throws NoSuchMethodException {
+        if (removeUniqueIdAssociationMethod == null) {
+            removeUniqueIdAssociationMethod = android.hardware.input.InputManager.class.getMethod(
+                    "removeUniqueIdAssociation", String.class);
+        }
+        return removeUniqueIdAssociationMethod;
+    }
+
+    @TargetApi(AndroidVersions.API_33_ANDROID_13)
+    public void removeUniqueIdAssociation(String inputPort) {
+        try {
+            Method method = getRemoveUniqueIdAssociationMethod();
+            method.invoke(manager, inputPort);
+        } catch (ReflectiveOperationException e) {
+            Ln.e("Cannot remove unique id association", e);
         }
     }
 
