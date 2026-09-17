@@ -44,22 +44,6 @@ The important test is not simply whether the virtual display starts.
 
 The modification must actually route UHID input to the virtual display.
 
-Example
-
-The intended setup is:
-
-        Android Device
-             │
-      ┌──────┴──────┐
-      │             │
-Physical Display   Virtual Display
-      │             │
-      │             └── UHID input
-      │
-      └────────────── SCRCPY
-                         │
-                         ▼
-                         PC
 
 Important
 
