@@ -1,6 +1,7 @@
 package com.genymobile.scrcpy.control;
 
 import com.genymobile.scrcpy.AndroidVersions;
+import com.genymobile.scrcpy.display.DisplayInfo;
 import com.genymobile.scrcpy.util.Ln;
 import com.genymobile.scrcpy.util.StringUtils;
 import com.genymobile.scrcpy.wrappers.ServiceManager;
@@ -22,17 +23,14 @@ import java.nio.charset.StandardCharsets;
 
 public final class UhidManager {
 
-    // Linux: include/uapi/linux/uhid.h
     private static final int UHID_OUTPUT = 6;
     private static final int UHID_CREATE2 = 11;
     private static final int UHID_INPUT2 = 12;
 
-    // Linux: include/uapi/linux/input.h
     private static final short BUS_VIRTUAL = 0x06;
 
-    private static final int SIZE_OF_UHID_EVENT = 4380; // sizeof(struct uhid_event)
+    private static final int SIZE_OF_UHID_EVENT = 4380;
 
-    // Must be unique across the system
     private static final String INPUT_PORT = "scrcpy:" + Os.getpid();
 
     private final String displayUniqueId;
@@ -45,7 +43,7 @@ public final class UhidManager {
 
     public UhidManager(DeviceMessageSender sender, String displayUniqueId) {
         this.sender = sender;
-        this.displayUniqueId = displayUniqueId;
+        this.displayUniqueId = displayUniqueId != null ? displayUniqueId : findScrcpyVirtualDisplayUniqueId();
         if (Build.VERSION.SDK_INT >= AndroidVersions.API_23_ANDROID_6_0) {
             HandlerThread thread = new HandlerThread("UHidManager");
             thread.start();
@@ -55,11 +53,37 @@ public final class UhidManager {
         }
     }
 
+    private static String findScrcpyVirtualDisplayUniqueId() {
+        if (Build.VERSION.SDK_INT < AndroidVersions.API_33_ANDROID_13) {
+            return null;
+        }
+
+        try {
+            int[] displayIds = ServiceManager.getDisplayManager().getDisplayIds();
+            for (int displayId : displayIds) {
+                if (displayId == 0) {
+                    continue;
+                }
+                DisplayInfo displayInfo = ServiceManager.getDisplayManager().getDisplayInfo(displayId);
+                if (displayInfo == null) {
+                    continue;
+                }
+                String uniqueId = displayInfo.getUniqueId();
+                if (uniqueId != null && uniqueId.contains(",scrcpy,")) {
+                    return uniqueId;
+                }
+            }
+        } catch (RuntimeException e) {
+            Ln.w("Could not find scrcpy virtual display", e);
+        }
+
+        return null;
+    }
+
     public void open(int id, int vendorId, int productId, String name, byte[] reportDesc) throws IOException {
         try {
             FileDescriptor fd = Os.open("/dev/uhid", OsConstants.O_RDWR, 0);
             try {
-                // First UHID device added
                 boolean firstDevice = fds.isEmpty();
 
                 FileDescriptor old = fds.put(id, fd);
@@ -118,21 +142,6 @@ public final class UhidManager {
     }
 
     private static byte[] extractHidOutputData(ByteBuffer buffer) {
-        /*
-         * #define UHID_DATA_MAX 4096
-         * struct uhid_event {
-         *     uint32_t type;
-         *     union {
-         *         // ...
-         *         struct uhid_output_req {
-         *             __u8 data[UHID_DATA_MAX];
-         *             __u16 size;
-         *             __u8 rtype;
-         *         };
-         *     };
-         * } __attribute__((__packed__));
-         */
-
         if (buffer.remaining() < 4099) {
             Ln.w("Incomplete HID output");
             return null;
@@ -163,27 +172,6 @@ public final class UhidManager {
     }
 
     private static byte[] buildUhidCreate2Req(int vendorId, int productId, String name, byte[] reportDesc, String phys) {
-        /*
-         * struct uhid_event {
-         *     uint32_t type;
-         *     union {
-         *         // ...
-         *         struct uhid_create2_req {
-         *             uint8_t name[128];
-         *             uint8_t phys[64];
-         *             uint8_t uniq[64];
-         *             uint16_t rd_size;
-         *             uint16_t bus;
-         *             uint32_t vendor;
-         *             uint32_t product;
-         *             uint32_t version;
-         *             uint32_t country;
-         *             uint8_t rd_data[HID_MAX_DESCRIPTOR_SIZE];
-         *         };
-         *     };
-         * } __attribute__((__packed__));
-         */
-
         ByteBuffer buf = ByteBuffer.allocate(280 + reportDesc.length).order(ByteOrder.nativeOrder());
         buf.putInt(UHID_CREATE2);
 
@@ -205,26 +193,13 @@ public final class UhidManager {
         buf.putShort(BUS_VIRTUAL);
         buf.putInt(vendorId);
         buf.putInt(productId);
-        buf.putInt(0); // version
-        buf.putInt(0); // country;
+        buf.putInt(0);
+        buf.putInt(0);
         buf.put(reportDesc);
         return buf.array();
     }
 
     private static byte[] buildUhidInput2Req(byte[] data) {
-        /*
-         * struct uhid_event {
-         *     uint32_t type;
-         *     union {
-         *         // ...
-         *         struct uhid_input2_req {
-         *             uint16_t size;
-         *             uint8_t data[UHID_DATA_MAX];
-         *         };
-         *     };
-         * } __attribute__((__packed__));
-         */
-
         ByteBuffer buf = ByteBuffer.allocate(6 + data.length).order(ByteOrder.nativeOrder());
         buf.putInt(UHID_INPUT2);
         buf.putShort((short) data.length);
@@ -233,15 +208,12 @@ public final class UhidManager {
     }
 
     public void close(int id) {
-        // Linux: Documentation/hid/uhid.rst
-        // If you close() the fd, the device is automatically unregistered and destroyed internally.
         FileDescriptor fd = fds.remove(id);
         if (fd != null) {
             unregisterUhidListener(fd);
             close(fd);
 
             if (fds.isEmpty()) {
-                // Last UHID device removed
                 removeUniqueIdAssociation();
             }
         } else {
@@ -270,18 +242,26 @@ public final class UhidManager {
     }
 
     private boolean mustUseInputPort() {
-        return Build.VERSION.SDK_INT >= AndroidVersions.API_35_ANDROID_15 && displayUniqueId != null;
+        return Build.VERSION.SDK_INT >= AndroidVersions.API_33_ANDROID_13 && displayUniqueId != null;
     }
 
     private void addUniqueIdAssociation() {
         if (mustUseInputPort()) {
-            ServiceManager.getInputManager().addUniqueIdAssociationByPort(INPUT_PORT, displayUniqueId);
+            if (Build.VERSION.SDK_INT >= AndroidVersions.API_35_ANDROID_15) {
+                ServiceManager.getInputManager().addUniqueIdAssociationByPort(INPUT_PORT, displayUniqueId);
+            } else {
+                ServiceManager.getInputManager().addUniqueIdAssociation(INPUT_PORT, displayUniqueId);
+            }
         }
     }
 
     private void removeUniqueIdAssociation() {
         if (mustUseInputPort()) {
-            ServiceManager.getInputManager().removeUniqueIdAssociationByPort(INPUT_PORT);
+            if (Build.VERSION.SDK_INT >= AndroidVersions.API_35_ANDROID_15) {
+                ServiceManager.getInputManager().removeUniqueIdAssociationByPort(INPUT_PORT);
+            } else {
+                ServiceManager.getInputManager().removeUniqueIdAssociation(INPUT_PORT);
+            }
         }
     }
 }
