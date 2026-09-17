@@ -4,7 +4,7 @@ scrcpy Android 13 Compatible
 
 Well, we made a version that is compatible with it.
 
-"screenshot" (assets/screenshot-debian-600.jpg)
+
 
 What is this?
 
