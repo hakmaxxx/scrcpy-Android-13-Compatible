@@ -50,6 +50,25 @@ The important test is not simply whether the virtual display starts.
 
 The modification must actually route UHID input to the **virtual display**.
 
+## Testing
+
+The primary development and testing platform is **Windows**.
+
+Currently tested on:
+
+```text
+Windows
+Samsung Galaxy A32 4G
+Android 13
+SCRCPY v4.1
+```
+
+Linux and macOS have not been personally tested by the developer.
+
+If you test this project on **Linux or macOS**, please let us know whether it works or not. Include your operating system and version, Android device and version, whether virtual-display input worked, and any relevant errors or logs if possible.
+
+With your permission, useful testing reports may be credited in the README with the tester's GitHub username.
+
 ## Example
 
 The intended setup is:
