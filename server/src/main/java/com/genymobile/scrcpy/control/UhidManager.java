@@ -13,6 +13,7 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 import android.util.ArrayMap;
+import android.view.Display;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -65,11 +66,14 @@ public final class UhidManager {
                     continue;
                 }
                 DisplayInfo displayInfo = ServiceManager.getDisplayManager().getDisplayInfo(displayId);
-                if (displayInfo == null) {
+                if (displayInfo == null || displayInfo.type != Display.TYPE_VIRTUAL) {
+                    continue;
+                }
+                if (!"scrcpy".equals(displayInfo.name)) {
                     continue;
                 }
                 String uniqueId = displayInfo.getUniqueId();
-                if (uniqueId != null && uniqueId.contains(",scrcpy,")) {
+                if (uniqueId != null) {
                     return uniqueId;
                 }
             }
