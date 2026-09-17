@@ -50,6 +50,43 @@ The important test is not simply whether the virtual display starts.
 
 The modification must actually route UHID input to the **virtual display**.
 
+## Windows installation
+
+The Windows package is intended to work like the normal SCRCPY v4.1 Windows package: extract it and run SCRCPY from the extracted folder.
+
+The package contains the normal Windows files, including:
+
+```text
+scrcpy.exe
+scrcpy-noconsole.vbs
+scrcpy-server
+adb.exe
+AdbWinApi.dll
+AdbWinUsbApi.dll
+open_a_terminal_here.bat
+```
+
+The Windows client (`scrcpy.exe`) remains the normal SCRCPY v4.1 client. The Android-side `scrcpy-server` is the component containing the modified compatibility code.
+
+This means the package keeps the normal SCRCPY file layout while using the modified Android server.
+
+### Install
+
+1. Download the **Windows Android 13 Compatible** package from the project's releases/build artifacts.
+2. Extract the ZIP to a folder.
+3. Enable USB debugging on the Android device.
+4. Connect the device with USB.
+5. Open a terminal in the extracted folder.
+6. Run SCRCPY normally, or use the desired UHID options:
+
+```text
+scrcpy.exe --mouse=uhid --keyboard=uhid
+```
+
+The official SCRCPY Windows release is also distributed as a ZIP that is extracted before running, so this project follows the same model.
+
+> **Important:** This project does not replace the Windows `scrcpy.exe` client with a different Android implementation. The Android compatibility change is in the bundled `scrcpy-server`.
+
 ## Testing
 
 The primary development and testing platform is **Windows**.
